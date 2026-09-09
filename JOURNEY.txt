@@ -1,0 +1,37 @@
+LEARNING GOALS:
+4 components:
+1. vector DB:
+	goal:  
+	1. structure the text document in proper format for proper chunking and info retrieval like separating each charachters strengths , weakness their talking,style behaviour etc (idea: their behavior will decide wheather they play or not or how they fight in game)
+	COMPLETED:
+	1. IMPLEMENTED BASIC RAG 
+	2. IMPLEMENTED BASIC PIPELINE
+DONE	
+2. relational DB:
+	GOAL:
+	1. make relational DB with specified columns , day 2
+3. LLM Model :
+	GOAL:
+	1. prompt engineering to get desired output, day 3-4
+	COMPLETED:
+	1. USED AND TESTED NEW_MODEL
+4. game engine:
+	GOAL:
+	1. backend logic , day 4-7
+5. evaluation of rag and llm
+
+goal:1. for front end include character selection, vs bot or player (cpu = True for bot) to change the format of output
+2. create different vecdb of different players and based on id load that db only 
+3. evaluate rag output for normal chain splitter vs agent based chunking  
+
+
+pip install langchain-community langchain-text-splitters langchain-openai langchain-chroma python-dotenv
+
+from huggingface_hub import hf_hub_download
+
+hf_hub_download(
+    repo_id="Qwen/Qwen2.5-3B-Instruct-GGUF",
+    filename="qwen2.5-3b-instruct-q4_k_m.gguf",
+    local_dir="C:\\Users\\ADMIN\\Desktop\\llm_poke_game",  # Change to your folder path
+    local_dir_use_symlinks=False
+)
