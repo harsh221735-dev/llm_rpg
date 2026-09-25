@@ -1,40 +1,56 @@
-SUPABASE_URL='https://ehucijmriybfxqmbjwci.supabase.co'
-SUPABASE_KEY='sb_publishable_G5qZqesljyBkGVZk4neg6g_UEIXTC9O'
-
-from supabase import create_client, Client
 import os
-from dotenv import load_dotenv   # for temporary password
+from flask import Flask
+from supabase import create_client, Client
+from dotenv import load_dotenv
 
 load_dotenv()
-password = os.getenv("my_password")
-# 1. Connect to your Supabase project
-# Use your standard Project URL and Anon (Public) Key from the dashboard settings
-url: str = SUPABASE_URL
-public_anon_key: str = SUPABASE_KEY
 
-supabase: Client = create_client(url, public_anon_key)
+app = Flask(__name__)
 
+supabase: Client = create_client(
+    os.environ.get("SUPABASE_URL"),
+    os.environ.get("SUPABASE_KEY")
+)
 
-# 2. Log in as YOURSELF so the SELECT policy recognizes your ID
-session = supabase.auth.sign_in_with_password({
-    "email": "harsh28.sakhare@gmail.com",
-    "password": password
-})
-#selected_player = 1
-#opponent = 2
-def load_player_info(selected_player,opponent):
-    # 3. Fetch the data from your table 
-    # Replace 'your_table_name' with the exact name of your table   
-    response1 = (supabase.table("players").select("base_attack","base_stamina").eq('id',selected_player).execute())   
-    response2 = (supabase.table("players").select("base_defence","base_speed").eq('id',opponent).execute())
-
-    print('attacker:',response1.data)    
-    print('opponent:',response2.data)
+# 1. Added <selected_player> to the URL path to map it to your function argument
+@app.route('/database/<selected_player>')
+def load_player_info(selected_player):
     
-    base_attack = response1.data[0]['base_attack']    
-    base_defence = response2.data[0]['base_defence']  
-    base_speed = response2.data[0]['base_speed']  
-    base_stamina = response1.data[0]['base_stamina']  
-    # 4. View your data 
-    return [base_attack,base_defence,base_speed,base_stamina]
-#print(load_player_info(selected_player,opponent))
+    # 2. Fetch the data from your table 
+    response1 = supabase.table("players").select('*').eq('id',selected_player).execute()   
+
+    print('attacker data raw:', response1.data)    
+    
+    # 3. CRITICAL FIX: Check if the database actually returned a player
+    if not response1.data:
+        return {'error': f'Player with ID {selected_player} not found'}, 404
+
+    # 4. Extract data safely now that we know response1.data[0] exists
+    player_data = response1.data[0]
+    
+    player_id1 = player_data['id']
+    player_name = player_data['player_name']
+    base_health = player_data['base_health']
+    base_attack = player_data['base_attack']    
+    base_defence = player_data['base_defence']  
+    base_speed = player_data['base_speed']  
+    base_stamina = player_data['base_stamina']  
+
+    # 5. Return JSON output (Flask automatically turns dicts into JSON)
+    return {
+        'output': [
+            player_id1,
+            player_name,
+            base_health,
+            base_attack,
+            base_defence,
+            base_speed,
+            base_stamina
+        ]
+    }
+
+
+if __name__ == '__main__':
+    # Change port from 5000 to 5050
+    app.run(debug=True, port=8800)
+
