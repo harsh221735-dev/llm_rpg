@@ -15,6 +15,8 @@ if 'start_battle' not in st.session_state:
     st.session_state.start_battle = False
 if 'waiting_for_match' not in st.session_state:
     st.session_state.waiting_for_match = False
+if 'current_attacker' not in st.session_state:
+    st.session_state.current_attacker = False
 #if 'player_list' not in st.session_state:
 #    st.session_state.player_list = []
 

@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
 import time
-import database
 import requests
+import random
 
 llm, db = load_models.loaded_models()
 
@@ -42,7 +42,7 @@ def get_charachter(payload: IdPayload):
     
     # 2. FIX: Call the database function TWICE separately using 1 argument each
     player_data = requests.get(url=f'http://127.0.0.1:8800/database/{player_char_id}')
-    opponent_data = requests.get(url=f'http://127.0.0.1:8800/database/{player_char_id}')
+    opponent_data = requests.get(url=f'http://127.0.0.1:8800/database/{opp_char_id}')
     
     global charach_attack, charach_defence, charach_speed, charach_stamina, selected_char
     global opponent_attack, opponent_defence, opponent_speed, opponent_stamina, opponent
@@ -83,101 +83,123 @@ def get_charachter(payload: IdPayload):
         "opponent": opponent
     }
 
+# 1. State Store to track the current active attacker ID globally across endpoints
+game_state = {
+    "current_attacker_id": None
+}
+# 1. State Store to track the current active attacker ID globally across endpoints
+game_state = {
+    "current_attacker_id": None
+}
 
-     
+class CurrAttackerPayload(BaseModel):
+    id: str
+    opponent_id: str
+
+@app.post('/who_will_attacker')
+def get_current_attacker(payload: CurrAttackerPayload):
+    # Initialize turn only if the game just started or hasn't been set yet
+    if game_state["current_attacker_id"] is None:
+        game_state["current_attacker_id"] = random.choice([payload.id, payload.opponent_id])
+    
+    return {'attacker': game_state["current_attacker_id"]}
+
 
 class AttackPayload(BaseModel):
     attack: str
-    attacker: str
-    opponent_str: str
+    attacker: str       
+    opponent_str: str   
+    attacker_id: str    
+    opponent_id: str    
+
 memory = [] 
+
 @app.post('/give_attack')
-def attack(payload: AttackPayload):
-    global charach_attack, charach_defence, charach_speed, charach_stamina,selected_char
-    global opponent_attack, opponent_defence, opponent_speed, opponent_stamina,opponent
+def process_attack(payload: AttackPayload):
+    global charach_attack, charach_defence, charach_speed, charach_stamina, selected_char
+    global opponent_attack, opponent_defence, opponent_speed, opponent_stamina, opponent
+    
     query = payload.attack
-    attacker = payload.attacker
-    opponent_str = payload.opponent_str
+    current_attacker_name = payload.attacker
+    current_opponent_name = payload.opponent_str
 
     print('success 1')
 
+    # Memory Tracking Logic
     window_size = 2     
-    memory.append(f'attacker:{attacker},attacker_attack_:{query}')        
+    memory.append(f'attacker:{current_attacker_name},attacker_attack_:{query}')        
     if len(memory) > window_size:       
         memory.pop(0)            
-    print('memory: ',memory)        
-    print('attacker: ',attacker)        
-    print('opponent: ',opponent_str)        
-    #retrieving         
-    print('success 2')
+
+    # Retriever Logic
     retriever = db.as_retriever(            
-        search_type = 'similarity_score_threshold',  #use mmr method for diverse retrivation of content         
-        search_kwargs={'k':1,'score_threshold':0.3}         
-        )           
-    relevant_docs =retriever.invoke(query)          
-    #print('user query : ',query)      
-    print('success 3')     
-    print('context: \n')            
-    for i,doc in enumerate(relevant_docs):          
-        print(f'document {i+1} :')          
-        print(f'content : {doc.page_content[:100]}')            
-        print(f'characters : {len(doc.page_content)}')          
+        search_type='similarity_score_threshold',
+        search_kwargs={'k': 1, 'score_threshold': 0.3}         
+    )           
+    relevant_docs = retriever.invoke(query)          
+    
+    # FIX 1: Removed the duplicated crash-prone statement and wrapped safely
+    context = relevant_docs[0].page_content if relevant_docs else "Standard physical confrontation environment."
 
-    context = relevant_docs[0].page_content         
-
-    # instead of passing whole attributes like health= 100/100, speed120/120 etc just use threshold and pass high,normal,low,very_low
-    if attacker == selected_char['player_name']:
-        attacker_health = charach_health
-        oppo_health = opponent_health
+    # Dynamic attribute targeting based on active attacker profile name
+    if current_attacker_name == selected_char['player_name']:
+        current_att_health = charach_health
+        current_opp_health = opponent_health
         att_max = {'attack': selected_char['curr_attack'], 'defence': selected_char['curr_defence'], 'speed': selected_char['curr_speed'], 'stamina': selected_char['curr_stamina']}
         opp_max = {'attack': opponent['curr_attack'], 'defence': opponent['curr_defence'], 'speed': opponent['curr_speed'], 'stamina': opponent['curr_stamina']}
+        
+        a_att, a_def, a_spd, a_stm = charach_attack, charach_defence, charach_speed, charach_stamina
+        o_att, o_def, o_spd, o_stm = opponent_attack, opponent_defence, opponent_speed, opponent_stamina
     else:
-        attacker_health = opponent_health
-        oppo_health = charach_health
+        current_att_health = opponent_health
+        current_opp_health = charach_health
         att_max = {'attack': opponent['curr_attack'], 'defence': opponent['curr_defence'], 'speed': opponent['curr_speed'], 'stamina': opponent['curr_stamina']}
         opp_max = {'attack': selected_char['curr_attack'], 'defence': selected_char['curr_defence'], 'speed': selected_char['curr_speed'], 'stamina': selected_char['curr_stamina']}
-    def get_attributes(current,base):
-        if current <= 0.25*base:     
-            attacker_attack_chng = 'very very low'      
+        
+        a_att, a_def, a_spd, a_stm = opponent_attack, opponent_defence, opponent_speed, opponent_stamina
+        o_att, o_def, o_spd, o_stm = charach_attack, charach_defence, charach_speed, charach_stamina
 
-        elif current <= 0.5*base:        
-            attacker_attack_chng = 'very low'       
-
-        elif current <= 0.75*base:       
-            attacker_attack_chng = 'low'        
-
+    def get_attributes(current, base):
+        if current <= 0.25 * base:     
+            return 'very very low'      
+        elif current <= 0.5 * base:        
+            return 'very low'       
+        elif current <= 0.75 * base:       
+            return 'low'        
         elif current <= base:        
-            attacker_attack_chng = 'normal'     
-
+            return 'normal'     
         else:       
-           attacker_attack_chng = 'high'   
-        return attacker_attack_chng   
+            return 'high'   
     
-    attacker_attack_chng  = get_attributes(charach_attack, att_max['attack'])
-    attacker_defence_chng = get_attributes(charach_defence, att_max['defence'])
-    attacker_speed_chng   = get_attributes(charach_speed, att_max['speed'])
-    attacker_stamina_chng = get_attributes(charach_stamina, att_max['stamina'])
+    attacker_attack_chng  = get_attributes(a_att, att_max['attack'])
+    attacker_defence_chng = get_attributes(a_def, att_max['defence'])
+    attacker_speed_chng   = get_attributes(a_spd, att_max['speed'])
+    attacker_stamina_chng = get_attributes(a_stm, att_max['stamina'])
 
-    opponent_attack_chng  = get_attributes(opponent_attack, opp_max['attack'])
-    opponent_defence_chng = get_attributes(opponent_defence, opp_max['defence'])
-    opponent_speed_chng   = get_attributes(opponent_speed, opp_max['speed'])
-    opponent_stamina_chng = get_attributes(opponent_stamina, opp_max['stamina'])
+    opponent_attack_chng  = get_attributes(o_att, opp_max['attack'])
+    opponent_defence_chng = get_attributes(o_def, opp_max['defence'])
+    opponent_speed_chng   = get_attributes(o_spd, opp_max['speed'])
+    opponent_stamina_chng = get_attributes(o_stm, opp_max['stamina'])
 
-    prompt = f"<|im_start|>system\nYou are a smart scenario predictor of a versus battle game.<|im_end|>\n<|im_start|>user\n'just give prediction in under 20 words and change in current_attributes in 'percentage' in opponent and attacker by carefully analyzing all parameters in the format:{{'prediction': '...', 'change_in_attacker_attributes': ['attack':,'defence':,'speed':,'stamina':],'change_in_opponent_attributes':['attack':,'defence':,'speed':,'health':]}}'; attacker: {attacker} ,attacker_attributes :[attack={attacker_attack_chng},stamina={attacker_stamina_chng},speed={attacker_speed_chng}]; opponent: {opponent} ,opponent_attributes :[health={oppo_health},speed={opponent_speed_chng},def={opponent_defence_chng}],{attacker}'s_attack:{query},attacker's attack_info:{context},previous_actions:{memory},attribute_behaviour-'effects occur all time:attack consumes stamina based on its power, effects occur based on attack:depends on type and power of attack'.<|im_end|>\n<|im_start|>assistant\n"          
+    # Build Prompt
+    prompt = f"<|im_start|>system\nYou are a smart scenario predictor of a versus battle game.<|im_end|>\n<|im_start|>user\n'just give prediction in under 20 words and change in current_attributes in 'percentage' in opponent and attacker by carefully analyzing all parameters in the format:{{'prediction': '...', 'change_in_attacker_attributes': ['attack':,'defence':,'speed':,'stamina':],'change_in_opponent_attributes':['attack':,'defence':,'speed':,'health':]}}'; attacker: {current_attacker_name} ,attacker_attributes :[attack={attacker_attack_chng},stamina={attacker_stamina_chng},speed={attacker_speed_chng}]; opponent: {current_opponent_name} ,opponent_attributes :[health={current_opp_health},speed={opponent_speed_chng},def={opponent_defence_chng}],{current_attacker_name}'s_attack:{query},attacker's attack_info:{context},previous_actions:{memory},attribute_behaviour-'effects occur all time:attack consumes stamina based on its power, effects occur based on attack:depends on type and power of attack'.<|im_end|>\n<|im_start|>assistant\n"          
 
-    # 3. Generate the response          
-    print("Thinking...")            
-    output = llm(           
-        prompt,         
-        max_tokens=128,  # Limit output length to save time/RAM         
-        stop=["<|im_end|>"],  # Stop generating when model finishes         
-        echo=False          
-    )           
+    # LLM Execution
+    output = llm(prompt, max_tokens=128, stop=["<|im_end|>"], echo=False)           
     result = output['choices'][0]['text']
-    # 4. Print the result           
-    print("\nAnswer:")          
-    print(result)
-    return {'result': result}
+
+    # FIX 2: Safely pass turn alternation based on tracking context matching strings
+    if game_state["current_attacker_id"] == payload.attacker_id:
+        game_state["current_attacker_id"] = payload.opponent_id
+    else:
+        game_state["current_attacker_id"] = payload.attacker_id
+
+    return {
+        'result': result,
+        'attacker': current_attacker_name,
+        'opponent': current_opponent_name
+    }
+
 
 codes = {}
 users = set()

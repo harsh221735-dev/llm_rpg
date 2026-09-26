@@ -24,14 +24,14 @@ goal:1. for front end include character selection, vs bot or player (cpu = True 
 2. create different vecdb of different players and based on id load that db only 
 3. evaluate rag output for normal chain splitter vs agent based chunking  
 
+Probelsm to solev:
+1. when generate code and move from 1st page to 2nd when enetrd code make sure that user with id that generatd code onl moves to 2nd page
+2. add timer
+3. make the text box available only when its their turn
+4. make health bars and makeactual changes to health
+5. add more data of charachters
+6. sepeate eachcharch vector database and retirev accordingly 
+7. also when in 3rd page and reload it displays "Looking for match configurations..." instead of keeping reload on that redirect to 2nd page when that mesaage displays
 
-pip install langchain-community langchain-text-splitters langchain-openai langchain-chroma python-dotenv
 
-from huggingface_hub import hf_hub_download
 
-hf_hub_download(
-    repo_id="Qwen/Qwen2.5-3B-Instruct-GGUF",
-    filename="qwen2.5-3b-instruct-q4_k_m.gguf",
-    local_dir="C:\\Users\\ADMIN\\Desktop\\llm_poke_game",  # Change to your folder path
-    local_dir_use_symlinks=False
-)
